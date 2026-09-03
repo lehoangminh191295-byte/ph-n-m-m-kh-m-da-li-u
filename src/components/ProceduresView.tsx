@@ -33,7 +33,7 @@ interface ProceduresViewProps {
 
 const TYPE_FILTERS: { key: string; label: string; icon: string; countKey?: ProcedureType }[] = [
   { key: 'ALL', label: 'Tất cả thủ thuật', icon: '📋' },
-  { key: 'LASER', label: 'Laser Da Liễu', icon: '⚡', countKey: 'LASER' },
+  { key: 'LASER', label: 'Laser & Quang Trị Liệu (UV)', icon: '⚡', countKey: 'LASER' },
   { key: 'BOTOX', label: 'Tiêm Botox (Toxin)', icon: '💉', countKey: 'BOTOX' },
   { key: 'FILLER', label: 'Tiêm Filler (HA)', icon: '✨', countKey: 'FILLER' },
   { key: 'MESOTHERAPY', label: 'Mesotherapy & BAP', icon: '💧', countKey: 'MESOTHERAPY' },
@@ -282,6 +282,12 @@ export const ProceduresView: React.FC<ProceduresViewProps> = ({
                         )}
                         {proc.technicalParams.energy && (
                           <div>Năng lượng: <strong>{proc.technicalParams.energy}</strong></div>
+                        )}
+                        {proc.technicalParams.spotSize && (
+                          <div>Chùm tia/Spot: <strong>{proc.technicalParams.spotSize}</strong></div>
+                        )}
+                        {proc.technicalParams.exposureTime && (
+                          <div>Thời gian chiếu: <strong>{proc.technicalParams.exposureTime}</strong></div>
                         )}
                         {proc.technicalParams.botoxUnits && (
                           <div>Liều Botox: <strong>{proc.technicalParams.botoxUnits} Units</strong></div>

@@ -9,13 +9,19 @@ import {
   Droplet, 
   Layers, 
   Scissors, 
-  ShieldCheck,
-  Package,
-  Calendar,
-  User,
-  Activity
+  ShieldCheck, 
+  Package, 
+  Calendar, 
+  User, 
+  Activity,
+  Sun,
+  Flame,
+  Lightbulb,
+  Crosshair,
+  Clock,
+  Gauge
 } from 'lucide-react';
-import { ClinicalProcedure, ProcedureType, Patient, InventoryItem, ProcedureTechnicalParams } from '../types';
+import { ClinicalProcedure, ProcedureType, Patient, InventoryItem, ProcedureTechnicalParams, LaserSubtype } from '../types';
 import { loadInventory, adjustInventoryStock } from '../services/storageService';
 
 interface RecordProcedureModalProps {
@@ -27,7 +33,7 @@ interface RecordProcedureModalProps {
 }
 
 const PROCEDURE_TYPE_CONFIG: Record<ProcedureType, { label: string; icon: string; color: string; badgeBg: string }> = {
-  LASER: { label: 'Laser Da Liễu', icon: '⚡', color: 'text-amber-700 border-amber-300', badgeBg: 'bg-amber-50' },
+  LASER: { label: 'Laser Da Liễu & Trị Liệu Ánh Sáng', icon: '⚡', color: 'text-amber-700 border-amber-300', badgeBg: 'bg-amber-50' },
   BOTOX: { label: 'Tiêm Botulinum Toxin', icon: '💉', color: 'text-purple-700 border-purple-300', badgeBg: 'bg-purple-50' },
   FILLER: { label: 'Tiêm Filler HA', icon: '✨', color: 'text-blue-700 border-blue-300', badgeBg: 'bg-blue-50' },
   MESOTHERAPY: { label: 'Mesotherapy & BAP', icon: '💧', color: 'text-emerald-700 border-emerald-300', badgeBg: 'bg-emerald-50' },
@@ -35,6 +41,148 @@ const PROCEDURE_TYPE_CONFIG: Record<ProcedureType, { label: string; icon: string
   MINOR_SURGERY: { label: 'Tiểu phẫu da', icon: '✂️', color: 'text-rose-700 border-rose-300', badgeBg: 'bg-rose-50' },
   CHEMICAL_PEEL: { label: 'Peel da hóa học', icon: '🧪', color: 'text-orange-700 border-orange-300', badgeBg: 'bg-orange-50' }
 };
+
+export interface LaserSubtypeMeta {
+  key: LaserSubtype;
+  label: string;
+  shortLabel: string;
+  badge: string;
+  icon: string;
+  wavelengthDefault: string;
+  defaultEnergy: string;
+  defaultSpot: string;
+  defaultPulse: string;
+  defaultPasses: string;
+  defaultExposureTime?: string;
+  defaultProcedureName: string;
+  defaultProduct: string;
+  description: string;
+}
+
+export const LASER_SUBTYPES: LaserSubtypeMeta[] = [
+  {
+    key: 'CO2_SURGICAL',
+    label: 'Laser CO2 Bốc tách / Cắt đốt (10,600 nm)',
+    shortLabel: 'CO2 Bốc tách',
+    badge: 'Cắt đốt phẫu thuật',
+    icon: '🔥',
+    wavelengthDefault: '10,600 nm',
+    defaultEnergy: '3.5 - 5.0 W (Continuous / UltraPulse)',
+    defaultSpot: 'Đầu cắt đốt 0.2 mm',
+    defaultPulse: 'UltraPulse 200 µs',
+    defaultPasses: 'Cắt đốt bốc tách chuẩn xác từng lớp tổn thương',
+    defaultProcedureName: 'Laser CO2 phẫu thuật bốc tách nốt ruồi / u tuyến mồ hôi / u gai',
+    defaultProduct: 'Hệ thống Laser CO2 Surgical 10,600nm',
+    description: 'Điều trị nốt ruồi, u tuyến mồ hôi Syringoma, sừng tiết bã, hạt cơm, mụn cóc sinh dục, xanthelasma.',
+  },
+  {
+    key: 'CO2_FRACTIONAL',
+    label: 'Laser CO2 Fractional vi điểm (10,600 nm)',
+    shortLabel: 'CO2 Fractional',
+    badge: 'Tái tạo vi điểm & Sẹo',
+    icon: '⚡',
+    wavelengthDefault: '10,600 nm',
+    defaultEnergy: '45 mJ / microbeam',
+    defaultSpot: 'Scanner vi điểm 10x10 mm',
+    defaultPulse: 'Static mode, 150 Hz',
+    defaultPasses: 'Mật độ 15%, 2 passes chồng',
+    defaultProcedureName: 'Laser CO2 Fractional tái tạo vi điểm điều trị sẹo rỗ & trẻ hóa da',
+    defaultProduct: 'Hệ thống Lutronic eCO2 Fractional vi điểm',
+    description: 'Tái tạo vi điểm biểu mô, kích thích collagen sâu điều trị sẹo rỗ lõm xơ dính, lỗ chân lông to, rạn da.',
+  },
+  {
+    key: 'FRACTIONAL_NON_ABLATIVE',
+    label: 'Laser Fractional không bốc tách (Erbium 1550nm / Thulium 1927nm)',
+    shortLabel: 'Fractional Non-Ablative',
+    badge: 'Phục hồi nhanh',
+    icon: '✨',
+    wavelengthDefault: '1550 nm (Erbium Glass) / 1927 nm (Thulium)',
+    defaultEnergy: '20 mJ / microbeam',
+    defaultSpot: 'Handpiece vi điểm 15 mm',
+    defaultPulse: 'Dynamic Stamp mode',
+    defaultPasses: '3 passes đa hướng, độ phủ 20%',
+    defaultProcedureName: 'Laser Fractional không bốc tách thu nhỏ lỗ chân lông & tái tạo bề mặt',
+    defaultProduct: 'Hệ thống Laser Fraxel / Mosaic Erbium Glass',
+    description: 'Không tạo vảy mài đen, không bong tróc thô, thời gian nghỉ dưỡng tối thiểu, an toàn cho da sẫm màu.',
+  },
+  {
+    key: 'ND_YAG_1064',
+    label: 'Laser Nd:YAG 1064nm (Q-Switched / Long-Pulse)',
+    shortLabel: 'Nd:YAG 1064nm',
+    badge: 'Sắc tố sâu & Toning',
+    icon: '🎯',
+    wavelengthDefault: '1064 nm',
+    defaultEnergy: '1.8 J/cm2',
+    defaultSpot: 'Spot size 8 mm',
+    defaultPulse: '10 Hz, Nanosecond (5-10 ns)',
+    defaultPasses: '2 passes toning toàn mặt + 1 pass điểm sắc tố',
+    defaultProcedureName: 'Laser Nd:YAG 1064nm Q-Switched trị nám Melasma, sắc tố sâu & Toning',
+    defaultProduct: 'Laser Q-Switched Nd:YAG MedLite C6 / RevLite',
+    description: 'Phá vỡ hạt sắc tố Melanin tầng sâu trung bì, điều trị nám má Melasma, bớt Ota, Hori, xóa xăm tối màu.',
+  },
+  {
+    key: 'ND_YAG_532',
+    label: 'Laser Nd:YAG 532nm (KTP Tần số kép)',
+    shortLabel: 'Nd:YAG 532nm (KTP)',
+    badge: 'Tàn nhang & Mao mạch',
+    icon: '💎',
+    wavelengthDefault: '532 nm',
+    defaultEnergy: '1.0 J/cm2',
+    defaultSpot: 'Spot size 3 mm',
+    defaultPulse: '2 - 5 Hz, xung Nanosecond',
+    defaultPasses: '1 pass chọn lọc từng nốt (sương trắng Frosting)',
+    defaultProcedureName: 'Laser Nd:YAG 532nm (KTP) điều trị tàn nhang, đồi mồi & mao mạch nông',
+    defaultProduct: 'Laser Q-Switched Nd:YAG KTP 532nm',
+    description: 'Hấp thu mạnh tại melanin thượng bì và hemoglobin hồng cầu, trị tàn nhang, đồi mồi Lentigo, giãn mạch.',
+  },
+  {
+    key: 'UV_PHOTOTHERAPY',
+    label: 'Chiếu UV / Liệu pháp ánh sáng (Narrowband UVB 311nm & PUVA)',
+    shortLabel: 'Chiếu UV (UVB 311nm)',
+    badge: 'Quang trị liệu UV',
+    icon: '☀️',
+    wavelengthDefault: '311 nm (Narrowband UVB)',
+    defaultEnergy: 'Liều khởi đầu: 300 - 350 mJ/cm2',
+    defaultSpot: 'Buồng chiếu toàn thân / Đèn cục bộ',
+    defaultPulse: 'Liều kế đo kiểm định chuẩn tự ngắt',
+    defaultPasses: 'Liệu trình 2 - 3 lần / tuần, theo dõi hồng ban',
+    defaultExposureTime: '2 phút 15 giây',
+    defaultProcedureName: 'Chiếu UV dải hẹp (Narrowband UVB 311nm) điều trị Bạch biến & Vảy nến',
+    defaultProduct: 'Hệ thống buồng quang trị liệu Waldmann UV 7002 / Đèn cục bộ',
+    description: 'Tiêu chuẩn vàng ức chế miễn dịch và kích thích tế bào hắc tố cho Vảy nến (Psoriasis), Bạch biến (Vitiligo), Viêm da cơ địa.',
+  },
+  {
+    key: 'LED_PHOTOTHERAPY',
+    label: 'Chiếu đèn ánh sáng sinh học LED (Blue 415nm & Red 630nm)',
+    shortLabel: 'Chiếu đèn sinh học LED',
+    badge: 'Phục hồi & Kháng viêm',
+    icon: '💡',
+    wavelengthDefault: '415 nm (Blue) + 630 nm (Red)',
+    defaultEnergy: 'Cường độ quang 40 mW/cm2',
+    defaultSpot: 'Vòm quang học toàn mặt (Cách 15cm)',
+    defaultPulse: 'Chế độ sóng liên tục (Continuous Wave)',
+    defaultPasses: '1 liệu trình sau các thủ thuật da liễu',
+    defaultExposureTime: '20 phút (10 phút Blue + 10 phút Red)',
+    defaultProcedureName: 'Chiếu ánh sáng sinh học LED Blue-Red diệt khuẩn P.acnes & phục hồi mô',
+    defaultProduct: 'Vòm ánh sáng sinh học Bio-Light LED 7 màu',
+    description: 'Ánh sáng xanh 415nm diệt vi khuẩn gây mụn; ánh sáng đỏ 630nm kích thích ty thể tăng sinh collagen giảm viêm lành sẹo.',
+  },
+  {
+    key: 'OTHER_LASER',
+    label: 'Laser Da Liễu khác (Pico, Diode, Alexandrite...)',
+    shortLabel: 'Laser khác',
+    badge: 'Tùy chỉnh thông số',
+    icon: '🔬',
+    wavelengthDefault: '755 nm / 808 nm',
+    defaultEnergy: '15 J/cm2',
+    defaultSpot: 'Spot size 12 mm',
+    defaultPulse: '10 ms',
+    defaultPasses: '1 pass tiếp xúc làm mát Sapphire',
+    defaultProcedureName: 'Laser Da liễu can thiệp chuyên biệt',
+    defaultProduct: 'Hệ thống Laser da liễu chuyên khoa',
+    description: 'Các hệ thống máy Laser Picosecond, Diode triệt lông, Alexandrite 755nm hoặc Dye Laser xung màu PDL.',
+  }
+];
 
 interface ProcedurePreset {
   id: string;
@@ -52,42 +200,132 @@ interface ProcedurePreset {
 
 const PROCEDURE_PRESETS: ProcedurePreset[] = [
   {
-    id: 'pr-laser-co2',
-    name: 'Laser CO2 Fractional tái tạo vi điểm trị sẹo rỗ',
+    id: 'pr-laser-co2-surgical',
+    name: 'Laser CO2 phẫu thuật bốc tách nốt ruồi, u tuyến mồ hôi & u gai',
+    type: 'LASER',
+    productUsed: 'Hệ thống Laser CO2 Surgical 10,600nm',
+    dosageOrVolume: 'Cắt bốc tách 3 nốt tổn thương',
+    targetArea: 'Vùng quanh mi mắt dưới và cổ',
+    anesthesiaMethod: 'Tiêm tê Lidocaine 2% tại cuống tổn thương + Kem tê Lidocaine 10.56%',
+    immediateResponse: 'Đáy tổn thương sạch mô hoại tử, cầm máu hoàn toàn, mép vết cắt gọn gàng phẳng mịn.',
+    postCareInstructions: 'Chấm mỡ kháng sinh Fucidin/Bactroban ngày 2 lần, giữ khô vết thương trong 48h, để mài tự bong sau 7-10 ngày, chống nắng kỹ.',
+    params: {
+      laserSubtype: 'CO2_SURGICAL',
+      laserType: 'Laser CO2 phẫu thuật bốc tách 10,600 nm',
+      wavelength: '10,600 nm',
+      energy: '4.0 W (UltraPulse mode)',
+      spotSize: 'Đầu cắt đốt 0.2 mm',
+      pulseWidthOrFrequency: 'UltraPulse 200 µs',
+      passesOrDensity: 'Bốc tách chuẩn xác từng lớp mô bệnh',
+    },
+    suggestedCost: 1500000,
+  },
+  {
+    id: 'pr-laser-co2-fractional',
+    name: 'Laser CO2 Fractional tái tạo vi điểm trị sẹo rỗ & trẻ hóa',
     type: 'LASER',
     productUsed: 'Hệ thống Lutronic eCO2 Fractional vi điểm',
-    dosageOrVolume: '2 passes, 800 - 1000 micro-shots',
+    dosageOrVolume: '2 passes, 850 micro-shots',
     targetArea: 'Vùng má 2 bên và trán',
     anesthesiaMethod: 'Ủ tê kem Lidocaine 10.56% trong 45 phút + Làm mát Cryo Cooler',
     immediateResponse: 'Đỏ da đồng đều (Erythema Grade 2), phù nhẹ quanh vi lỗ nhiệt, an toàn không bỏng rát sâu.',
     postCareInstructions: 'Chườm gạc lạnh trong 24h đầu, xịt khoáng vô khuẩn mỗi 2 giờ, thoa serum B5/EGF phục hồi, kiêng nước lã 24h, chống nắng vật lý SPF 50+ sau ngày thứ 3.',
     params: {
-      laserType: 'CO2 Fractional 10,600 nm',
+      laserSubtype: 'CO2_FRACTIONAL',
+      laserType: 'Laser CO2 Fractional 10,600 nm',
       wavelength: '10,600 nm',
       energy: '45 mJ / microbeam',
+      spotSize: 'Scanner vi điểm 10x10 mm',
       passesOrDensity: 'Mật độ 15%, 2 passes chồng',
       pulseWidthOrFrequency: 'Static mode, 150 Hz',
     },
     suggestedCost: 3500000,
   },
   {
-    id: 'pr-laser-yag',
-    name: 'Laser Nd:YAG Q-Switched điều trị sắc tố & tàn nhang',
+    id: 'pr-laser-yag-1064',
+    name: 'Laser Nd:YAG 1064nm Q-Switched điều trị nám Melasma & Toning',
     type: 'LASER',
     productUsed: 'Laser Q-Switched Nd:YAG MedLite C6',
-    dosageOrVolume: '1500 pulses',
-    targetArea: 'Hai bên gò má và sống mũi',
-    anesthesiaMethod: 'Ủ tê Lidocaine 30 phút',
-    immediateResponse: 'Xuất hiện điểm sương trắng thoáng qua (Frosting), không xuất huyết dưới da.',
-    postCareInstructions: 'Đắp gạc lạnh làm dịu da ngay sau bắn, thoa kem phục hồi K-Ox, che chắn nắng tuyệt đối bằng khẩu trang tối màu và kem chống nắng SPF 50+.',
+    dosageOrVolume: '1800 pulses (Toàn mặt)',
+    targetArea: 'Hai bên gò má, sống mũi và trán',
+    anesthesiaMethod: 'Thổi lạnh Cryo Jet làm dịu da tại chỗ',
+    immediateResponse: 'Hồng ban nhẹ thoáng qua, không điểm xuất huyết dưới da, da sáng mịn tức thì.',
+    postCareInstructions: 'Đắp mặt nạ làm dịu da ngay sau bắn, thoa kem phục hồi K-Ox & serum Vitamin C, che chắn nắng tuyệt đối SPF 50+.',
     params: {
-      laserType: 'Q-Switched Nd:YAG',
-      wavelength: '1064 nm / 532 nm',
-      energy: '1.8 J/cm2 (Spot size 6mm)',
+      laserSubtype: 'ND_YAG_1064',
+      laserType: 'Laser Nd:YAG 1064nm Q-Switched',
+      wavelength: '1064 nm',
+      energy: '1.8 J/cm2',
+      spotSize: 'Spot size 8 mm',
       pulseWidthOrFrequency: '10 Hz, Nanosecond pulse',
-      passesOrDensity: '2 passes toning + 1 pass spot',
+      passesOrDensity: '2 passes toning toàn mặt + 1 pass điểm sắc tố đậm',
     },
     suggestedCost: 2500000,
+  },
+  {
+    id: 'pr-laser-yag-532',
+    name: 'Laser Nd:YAG 532nm (KTP) điều trị tàn nhang & đồi mồi Lentigo',
+    type: 'LASER',
+    productUsed: 'Laser Q-Switched Nd:YAG MedLite C6 (KTP Head)',
+    dosageOrVolume: '60 pulses (Bắn chọn lọc từng nốt)',
+    targetArea: 'Gò má 2 bên và sống mũi',
+    anesthesiaMethod: 'Ủ tê kem Lidocaine 30 phút',
+    immediateResponse: 'Xuất hiện điểm sương trắng tức thì tại nốt sắc tố (Instant Whitening Frosting), mép viền đỏ nhẹ.',
+    postCareInstructions: 'Bôi kem kháng viêm phục hồi, vảy mỏng sẽ hình thành và tự bong sau 5-7 ngày, tuyệt đối không cạy gỡ vảy non, chống nắng nghiêm ngặt.',
+    params: {
+      laserSubtype: 'ND_YAG_532',
+      laserType: 'Laser Nd:YAG 532nm (KTP)',
+      wavelength: '532 nm',
+      energy: '1.0 J/cm2',
+      spotSize: 'Spot size 3 mm',
+      pulseWidthOrFrequency: '2 Hz, Nanosecond pulse',
+      passesOrDensity: '1 pass chọn lọc từng tổn thương sắc tố',
+    },
+    suggestedCost: 2000000,
+  },
+  {
+    id: 'pr-uv-phototherapy',
+    name: 'Chiếu UV dải hẹp (Narrowband UVB 311nm) điều trị Bạch biến & Vảy nến',
+    type: 'LASER',
+    productUsed: 'Buồng chiếu quang trị liệu toàn thân Waldmann UV 7002',
+    dosageOrVolume: 'Liều: 350 mJ/cm2 (Thời gian: 2 phút 15 giây)',
+    targetArea: 'Vùng thân mình và 2 cẳng tay',
+    anesthesiaMethod: 'Không cần gây tê. Đeo kính bảo vệ mắt chống tia cực tím UV chuyên dụng.',
+    immediateResponse: 'Da ấm nhẹ, không xuất hiện rát đỏ quá mức hay phỏng nước (Đạt liều dưới hồng ban MED).',
+    postCareInstructions: 'Thoa kem dưỡng ẩm làm mềm da ngay sau chiếu, theo dõi phản ứng da sau 12-24h, duy trì tần suất 2-3 buổi/tuần.',
+    params: {
+      laserSubtype: 'UV_PHOTOTHERAPY',
+      laserType: 'Chiếu tia UV dải hẹp Narrowband UVB 311nm',
+      wavelength: '311 nm (Narrowband UVB)',
+      energy: '350 mJ/cm2',
+      spotSize: 'Buồng chiếu quang trị liệu toàn thân',
+      pulseWidthOrFrequency: 'Liều kế định chuẩn tự động ngắt',
+      exposureTime: '2 phút 15 giây',
+      passesOrDensity: 'Tăng liều 10% mỗi 2 buổi nếu không có hồng ban quá mức',
+    },
+    suggestedCost: 500000,
+  },
+  {
+    id: 'pr-led-phototherapy',
+    name: 'Chiếu đèn ánh sáng sinh học LED Blue (415nm) & Red (630nm)',
+    type: 'LASER',
+    productUsed: 'Vòm ánh sáng sinh học Bio-Light LED 7 màu',
+    dosageOrVolume: 'Thời gian 20 phút (10 phút Blue + 10 phút Red)',
+    targetArea: 'Toàn bộ khuôn mặt',
+    anesthesiaMethod: 'Không cần gây tê. Đeo kính bảo hộ mắt.',
+    immediateResponse: 'Da dịu mát, giảm cảm giác căng rát sưng đỏ sau lấy nhân mụn / sau peel.',
+    postCareInstructions: 'Thoa serum cấp ẩm HA và kem phục hồi da, uống đủ 2 lít nước mỗi ngày.',
+    params: {
+      laserSubtype: 'LED_PHOTOTHERAPY',
+      laserType: 'Chiếu đèn sinh học LED',
+      wavelength: '415 nm (Blue) / 630 nm (Red)',
+      energy: 'Cường độ quang 40 mW/cm2',
+      spotSize: 'Vòm chiếu toàn mặt (Khoảng cách 15 cm)',
+      pulseWidthOrFrequency: 'Sóng liên tục Continuous',
+      exposureTime: '20 phút',
+      passesOrDensity: '1 liệu trình sau các thủ thuật da liễu',
+    },
+    suggestedCost: 300000,
   },
   {
     id: 'pr-botox-wrinkles',
@@ -207,10 +445,13 @@ export const RecordProcedureModal: React.FC<RecordProcedureModalProps> = ({
   const [notes, setNotes] = useState('');
 
   // Technical params
+  const [selectedLaserSubtype, setSelectedLaserSubtype] = useState<LaserSubtype>('CO2_FRACTIONAL');
   const [techParams, setTechParams] = useState<ProcedureTechnicalParams>({
+    laserSubtype: 'CO2_FRACTIONAL',
     laserType: 'CO2 Fractional 10,600 nm',
     wavelength: '10,600 nm',
     energy: '45 mJ / microbeam',
+    spotSize: 'Scanner vi điểm 10x10 mm',
     passesOrDensity: 'Mật độ 15%, 2 passes',
     pulseWidthOrFrequency: 'Static mode, 150 Hz',
   });
@@ -223,6 +464,32 @@ export const RecordProcedureModal: React.FC<RecordProcedureModalProps> = ({
 
   const currentPatient = patient || allPatients.find((p) => p.id === selectedPatientId) || allPatients[0];
 
+  const handleSelectLaserSubtype = (subtypeKey: LaserSubtype) => {
+    setSelectedLaserSubtype(subtypeKey);
+    const meta = LASER_SUBTYPES.find((s) => s.key === subtypeKey);
+    if (!meta) return;
+
+    setTechParams((prev) => ({
+      ...prev,
+      laserSubtype: subtypeKey,
+      laserType: meta.label,
+      wavelength: meta.wavelengthDefault,
+      energy: meta.defaultEnergy,
+      spotSize: meta.defaultSpot,
+      pulseWidthOrFrequency: meta.defaultPulse,
+      passesOrDensity: meta.defaultPasses,
+      exposureTime: meta.defaultExposureTime || undefined,
+    }));
+
+    // Auto-update procedure name if currently generic or previous laser name
+    if (!procedureName || procedureName.startsWith('Laser') || procedureName.startsWith('Chiếu')) {
+      setProcedureName(meta.defaultProcedureName);
+    }
+    if (!productUsed || productUsed.startsWith('Hệ thống') || productUsed.startsWith('Laser') || productUsed.startsWith('Buồng') || productUsed.startsWith('Vòm')) {
+      setProductUsed(meta.defaultProduct);
+    }
+  };
+
   const handleApplyPreset = (preset: ProcedurePreset) => {
     setProcedureType(preset.type);
     setProcedureName(preset.name);
@@ -234,6 +501,10 @@ export const RecordProcedureModal: React.FC<RecordProcedureModalProps> = ({
     setPostCareInstructions(preset.postCareInstructions);
     setTechParams(preset.params);
     setCost(preset.suggestedCost);
+
+    if (preset.params.laserSubtype) {
+      setSelectedLaserSubtype(preset.params.laserSubtype);
+    }
 
     // Try finding matching inventory item
     const matchedInv = inventory.find((item) => 
@@ -376,10 +647,16 @@ export const RecordProcedureModal: React.FC<RecordProcedureModalProps> = ({
               </label>
               <select
                 value={procedureType}
-                onChange={(e) => setProcedureType(e.target.value as ProcedureType)}
+                onChange={(e) => {
+                  const newType = e.target.value as ProcedureType;
+                  setProcedureType(newType);
+                  if (newType === 'LASER') {
+                    handleSelectLaserSubtype(selectedLaserSubtype);
+                  }
+                }}
                 className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
               >
-                <option value="LASER">⚡ Laser Da Liễu (CO2, Nd:YAG, Pico...)</option>
+                <option value="LASER">⚡ Laser & Chiếu UV / Quang học (CO2, Fractional, Nd:YAG, UV...)</option>
                 <option value="BOTOX">💉 Tiêm Botulinum Toxin (Allergan, Dysport...)</option>
                 <option value="FILLER">✨ Tiêm Filler HA (Juvederm, Restylane...)</option>
                 <option value="MESOTHERAPY">💧 Mesotherapy & Tiêm BAP 5 điểm</option>
@@ -402,6 +679,83 @@ export const RecordProcedureModal: React.FC<RecordProcedureModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Special Laser & Phototherapy Subtype Selector */}
+          {procedureType === 'LASER' && (
+            <div className="p-4 rounded-xl border-2 border-amber-300 bg-amber-50/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Flame className="w-4 h-4 text-amber-600" />
+                    Phân loại Laser & Quang trị liệu (Chọn loại máy / nguồn sáng):
+                  </span>
+                  <p className="text-[11px] text-amber-800">
+                    Bấm chọn để hệ thống tự động tải bước sóng, năng lượng, đầu tip và liều chuẩn y khoa
+                  </p>
+                </div>
+                <span className="text-[11px] font-semibold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full">
+                  8 hệ thống chuyên khoa
+                </span>
+              </div>
+
+              {/* Subtype Cards Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {LASER_SUBTYPES.map((sub) => {
+                  const isSelected = selectedLaserSubtype === sub.key;
+                  return (
+                    <button
+                      key={sub.key}
+                      type="button"
+                      onClick={() => handleSelectLaserSubtype(sub.key)}
+                      className={`text-left p-2.5 rounded-xl border transition flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-300 scale-[1.01]'
+                          : 'bg-white hover:bg-amber-100/70 border-amber-200/80 text-slate-800 shadow-2xs'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-1 mb-1">
+                        <span className="text-lg leading-none">{sub.icon}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          isSelected ? 'bg-amber-700 text-amber-100' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {sub.badge}
+                        </span>
+                      </div>
+                      <div>
+                        <div className={`text-xs font-bold leading-tight ${isSelected ? 'text-white' : 'text-slate-900'}`}>
+                          {sub.shortLabel}
+                        </div>
+                        <div className={`text-[10px] mt-0.5 font-mono ${isSelected ? 'text-amber-100' : 'text-slate-500'}`}>
+                          {sub.wavelengthDefault.split('/')[0]}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Subtype Clinical Context Banner */}
+              {selectedLaserSubtype && (
+                <div className="text-[11px] bg-white text-slate-800 px-3 py-2 rounded-lg border border-amber-200 flex items-start gap-2 shadow-2xs">
+                  <Activity className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p>
+                      <strong className="text-amber-900">
+                        {LASER_SUBTYPES.find((s) => s.key === selectedLaserSubtype)?.label}:
+                      </strong>{' '}
+                      {LASER_SUBTYPES.find((s) => s.key === selectedLaserSubtype)?.description}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600 pt-0.5 font-mono">
+                      <span>• Bước sóng: <strong>{techParams.wavelength}</strong></span>
+                      <span>• Năng lượng: <strong>{techParams.energy}</strong></span>
+                      <span>• Chùm tia: <strong>{techParams.spotSize}</strong></span>
+                      {techParams.exposureTime && <span>• Thời gian: <strong>{techParams.exposureTime}</strong></span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Section 2: Procedure Identity & Personnel */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -581,36 +935,87 @@ export const RecordProcedureModal: React.FC<RecordProcedureModalProps> = ({
             </span>
 
             {procedureType === 'LASER' && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <label className="block font-medium text-slate-600 mb-1">Bước sóng (Wavelength):</label>
-                  <input
-                    type="text"
-                    value={techParams.wavelength || ''}
-                    onChange={(e) => setTechParams({ ...techParams, wavelength: e.target.value })}
-                    placeholder="10,600 nm, 1064 nm..."
-                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white"
-                  />
+              <div className="space-y-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1 flex items-center gap-1">
+                      <Gauge className="w-3.5 h-3.5 text-amber-600" />
+                      Bước sóng (Wavelength):
+                    </label>
+                    <input
+                      type="text"
+                      value={techParams.wavelength || ''}
+                      onChange={(e) => setTechParams({ ...techParams, wavelength: e.target.value })}
+                      placeholder="10,600 nm, 1064 nm, 532 nm, 311 nm..."
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-mono font-medium focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-amber-600" />
+                      Mức năng lượng / Công suất / Liều chiếu:
+                    </label>
+                    <input
+                      type="text"
+                      value={techParams.energy || ''}
+                      onChange={(e) => setTechParams({ ...techParams, energy: e.target.value })}
+                      placeholder="45 mJ, 1.8 J/cm2, 4.0 W, 350 mJ/cm2..."
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-mono font-medium focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1 flex items-center gap-1">
+                      <Crosshair className="w-3.5 h-3.5 text-amber-600" />
+                      Kích thước chùm tia (Spot Size / Scanner):
+                    </label>
+                    <input
+                      type="text"
+                      value={techParams.spotSize || ''}
+                      onChange={(e) => setTechParams({ ...techParams, spotSize: e.target.value })}
+                      placeholder="Spot 8mm, Scanner 10x10mm, Đầu cắt 0.2mm, Buồng chiếu..."
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block font-medium text-slate-600 mb-1">Mức năng lượng (Energy):</label>
-                  <input
-                    type="text"
-                    value={techParams.energy || ''}
-                    onChange={(e) => setTechParams({ ...techParams, energy: e.target.value })}
-                    placeholder="45 mJ, 1.8 J/cm2..."
-                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-600 mb-1">Mật độ / Số passes:</label>
-                  <input
-                    type="text"
-                    value={techParams.passesOrDensity || ''}
-                    onChange={(e) => setTechParams({ ...techParams, passesOrDensity: e.target.value })}
-                    placeholder="2 passes, Density 15%..."
-                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">
+                      Tần số xung / Độ rộng xung / Mode:
+                    </label>
+                    <input
+                      type="text"
+                      value={techParams.pulseWidthOrFrequency || ''}
+                      onChange={(e) => setTechParams({ ...techParams, pulseWidthOrFrequency: e.target.value })}
+                      placeholder="10 Hz Nanosecond, UltraPulse 200µs, Sóng liên tục..."
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">
+                      Mật độ vi điểm / Số passes:
+                    </label>
+                    <input
+                      type="text"
+                      value={techParams.passesOrDensity || ''}
+                      onChange={(e) => setTechParams({ ...techParams, passesOrDensity: e.target.value })}
+                      placeholder="2 passes, Mật độ 15%, 1 pass chọn lọc..."
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      Thời gian chiếu (UV / LED / Làm mát):
+                    </label>
+                    <input
+                      type="text"
+                      value={techParams.exposureTime || ''}
+                      onChange={(e) => setTechParams({ ...techParams, exposureTime: e.target.value })}
+                      placeholder="2 phút 15 giây, 20 phút (LED)..."
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:ring-2 focus:ring-amber-500 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
             )}

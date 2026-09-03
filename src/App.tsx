@@ -19,7 +19,8 @@ import {
   Hospital,
   Package,
   Zap,
-  Syringe
+  Syringe,
+  Cloud
 } from 'lucide-react';
 import { Patient, Lesion, Appointment, AuditLogEntry, FitzpatrickSkinType, ClinicalProcedure, InventoryItem } from './types';
 import {
@@ -43,9 +44,11 @@ import { PatientDetail } from './components/PatientDetail';
 import { AppointmentsView } from './components/AppointmentsView';
 import { ProceduresView } from './components/ProceduresView';
 import { InventoryView } from './components/InventoryView';
+import { GoogleDriveView } from './components/GoogleDriveView';
 import { NewPatientModal } from './components/NewPatientModal';
 import { SecurityLockScreen } from './components/SecurityLockScreen';
 import { SecurityAuditModal } from './components/SecurityAuditModal';
+import { initAuth } from './services/googleAuthService';
 
 export default function App() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -56,9 +59,13 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLocked, setIsLocked] = useState<boolean>(false);
 
-  // Active view: 'patients' | 'appointments' | 'procedures' | 'inventory'
-  const [currentTab, setCurrentTab] = useState<'patients' | 'appointments' | 'procedures' | 'inventory'>('patients');
+  // Active view: 'patients' | 'appointments' | 'procedures' | 'inventory' | 'google-drive'
+  const [currentTab, setCurrentTab] = useState<'patients' | 'appointments' | 'procedures' | 'inventory' | 'google-drive'>('patients');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+
+  // Google Drive Auth status
+  const [hasDriveAuth, setHasDriveAuth] = useState(false);
+  const [driveUserEmail, setDriveUserEmail] = useState<string | null>(null);
 
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -67,6 +74,30 @@ export default function App() {
   // Modals
   const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+
+  const reloadAllClinicData = () => {
+    setPatients(loadPatients());
+    setLesions(loadLesions());
+    setAppointments(loadAppointments());
+    setProcedures(loadProcedures());
+    setInventory(loadInventory());
+    setAuditLogs(loadAuditLogs());
+  };
+
+  // Google Auth listener
+  useEffect(() => {
+    const unsub = initAuth(
+      (user) => {
+        setHasDriveAuth(true);
+        setDriveUserEmail(user.email);
+      },
+      () => {
+        setHasDriveAuth(false);
+        setDriveUserEmail(null);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -294,6 +325,28 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => {
+              setSelectedPatientId(null);
+              setCurrentTab('google-drive');
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              currentTab === 'google-drive'
+                ? 'bg-blue-600 text-white'
+                : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
+            }`}
+          >
+            <Cloud className="w-4 h-4 text-blue-400" />
+            <span className="flex-1 text-left">Đồng Bộ Google Drive</span>
+            {hasDriveAuth ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-400" title="Đã liên kết Google Drive" />
+            ) : (
+              <span className="text-[10px] bg-blue-900/80 text-blue-300 px-1.5 py-0.5 rounded font-bold">
+                Mới
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setIsSecurityModalOpen(true)}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-slate-800 hover:text-slate-200 text-slate-400"
           >
@@ -369,6 +422,15 @@ export default function App() {
                   {inventory.length} Mặt hàng
                 </span>
               </div>
+            ) : currentTab === 'google-drive' ? (
+              <div className="flex items-center gap-2 sm:gap-3 truncate">
+                <h2 className="font-semibold text-slate-900 text-sm sm:text-base truncate">
+                  Đồng Bộ & Sao Lưu Google Drive
+                </h2>
+                <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0">
+                  Drive API v3
+                </span>
+              </div>
             ) : (
               <div className="flex items-center gap-2 sm:gap-3 truncate">
                 <h2 className="font-semibold text-slate-900 text-sm sm:text-base truncate">
@@ -418,7 +480,40 @@ export default function App() {
               >
                 Kho
               </button>
+              <button
+                onClick={() => {
+                  setSelectedPatientId(null);
+                  setCurrentTab('google-drive');
+                }}
+                className={`px-2 py-1 rounded text-xs font-semibold ${
+                  currentTab === 'google-drive' ? 'bg-blue-600 text-white' : 'text-slate-600 bg-slate-100'
+                }`}
+              >
+                Drive
+              </button>
             </div>
+
+            {/* Google Drive Status Indicator / Button */}
+            <button
+              onClick={() => {
+                setSelectedPatientId(null);
+                setCurrentTab('google-drive');
+              }}
+              className={`px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border flex items-center gap-1.5 transition ${
+                currentTab === 'google-drive'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                  : hasDriveAuth
+                  ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+              }`}
+              title="Mở bảng điều khiển đồng bộ Google Drive"
+            >
+              <Cloud className="w-3.5 h-3.5 text-blue-500" />
+              <span className="hidden lg:inline">
+                {hasDriveAuth ? (driveUserEmail ? driveUserEmail.split('@')[0] : 'Drive Kết Nối') : 'Google Drive'}
+              </span>
+              {hasDriveAuth && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+            </button>
 
             <button
               onClick={() => setIsSecurityModalOpen(true)}
@@ -489,6 +584,9 @@ export default function App() {
                   setCurrentTab('patients');
                 }}
               />
+            ) : currentTab === 'google-drive' ? (
+              /* Google Drive Cloud Sync, Backup and Restore */
+              <GoogleDriveView onDataRestored={reloadAllClinicData} />
             ) : (
               /* Patients Directory and Geometric Balance Clinical Overview */
               <div className="space-y-6">

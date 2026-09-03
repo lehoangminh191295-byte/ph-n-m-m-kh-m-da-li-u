@@ -166,3 +166,92 @@ export function getSecurityLockStatus(): boolean {
 export function setSecurityLockStatus(isLocked: boolean) {
   localStorage.setItem(LOCK_KEY, String(isLocked));
 }
+
+// --- Google Drive Backup & Restore Utilities ---
+export interface ClinicBackupPayload {
+  appVersion: string;
+  exportDate: string;
+  clinicName: string;
+  totalPatients: number;
+  totalLesions: number;
+  totalProcedures: number;
+  data: {
+    patients: Patient[];
+    lesions: Lesion[];
+    appointments: Appointment[];
+    procedures: ClinicalProcedure[];
+    inventory: InventoryItem[];
+    auditLogs: AuditLogEntry[];
+  };
+}
+
+export function getFullClinicExportData(): ClinicBackupPayload {
+  const patients = getStoredPatients();
+  const lesions = getStoredLesions();
+  const appointments = getStoredAppointments();
+  const procedures = getStoredProcedures();
+  const inventory = getStoredInventory();
+  const auditLogs = getStoredAuditLogs();
+
+  return {
+    appVersion: '1.2.0',
+    exportDate: new Date().toISOString(),
+    clinicName: 'Phòng Khám Da Liễu Dermacare AI',
+    totalPatients: patients.length,
+    totalLesions: lesions.length,
+    totalProcedures: procedures.length,
+    data: {
+      patients,
+      lesions,
+      appointments,
+      procedures,
+      inventory,
+      auditLogs,
+    },
+  };
+}
+
+export function restoreFullClinicData(payload: any): boolean {
+  if (!payload || !payload.data) {
+    throw new Error('Dữ liệu sao lưu không hợp lệ hoặc thiếu cấu trúc tiêu chuẩn');
+  }
+
+  const { patients, lesions, appointments, procedures, inventory, auditLogs } = payload.data;
+
+  if (Array.isArray(patients)) savePatients(patients);
+  if (Array.isArray(lesions)) saveLesions(lesions);
+  if (Array.isArray(appointments)) saveAppointments(appointments);
+  if (Array.isArray(procedures)) saveProcedures(procedures);
+  if (Array.isArray(inventory)) saveInventory(inventory);
+  if (Array.isArray(auditLogs)) localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(auditLogs));
+
+  logAuditEvent(
+    'SYSTEM_EXPORT',
+    `Khôi phục toàn bộ cơ sở dữ liệu phòng khám từ bản sao lưu Google Drive (${payload.exportDate || 'Không rõ ngày'})`,
+    undefined,
+    'Google Drive Restore',
+    'CRITICAL'
+  );
+
+  return true;
+}
+
+export function getPatientDossierExport(patientId: string) {
+  const patients = getStoredPatients();
+  const patient = patients.find((p) => p.id === patientId);
+  if (!patient) return null;
+
+  const lesions = getStoredLesions().filter((l) => l.patientId === patientId);
+  const appointments = getStoredAppointments().filter((a) => a.patientId === patientId);
+  const procedures = getStoredProcedures().filter((pr) => pr.patientId === patientId);
+
+  return {
+    appVersion: '1.2.0',
+    exportDate: new Date().toISOString(),
+    type: 'PATIENT_DOSSIER',
+    patient,
+    lesions,
+    appointments,
+    procedures,
+  };
+}

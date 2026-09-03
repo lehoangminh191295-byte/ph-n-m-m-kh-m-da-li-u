@@ -164,13 +164,26 @@ export type ProcedureType =
   | 'MINOR_SURGERY'
   | 'CHEMICAL_PEEL';
 
+export type LaserSubtype = 
+  | 'CO2_SURGICAL'           // Laser CO2 Phẫu thuật bốc tách (Cắt đốt nốt ruồi, u tuyến bã, sùi...)
+  | 'CO2_FRACTIONAL'         // Laser CO2 Fractional vi điểm (Sẹo rỗ, trẻ hóa vi điểm 10,600nm)
+  | 'FRACTIONAL_NON_ABLATIVE' // Laser Fractional không bốc tách (Erbium Glass 1550nm, Thulium 1927nm)
+  | 'ND_YAG_1064'            // Laser Nd:YAG 1064nm (Q-Switched toning, xung dài, sắc tố sâu)
+  | 'ND_YAG_532'             // Laser Nd:YAG 532nm (KTP trị tàn nhang, đồi mồi, mao mạch nông)
+  | 'UV_PHOTOTHERAPY'        // Chiếu UV / Quang trị liệu (Narrowband UVB 311nm, UVA/PUVA)
+  | 'LED_PHOTOTHERAPY'       // Chiếu đèn sinh học LED (Blue 415nm trị mụn, Red 630nm phục hồi)
+  | 'OTHER_LASER';           // Laser khác (Pico, Diode, Alexandrite...)
+
 export interface ProcedureTechnicalParams {
-  // Laser
-  laserType?: string; // e.g. "Laser CO2 Fractional", "Laser Nd:YAG Q-Switched", "Laser Pico", "Laser Diode"
-  wavelength?: string; // e.g. "10,600 nm", "1064 nm", "532 nm", "755 nm"
-  energy?: string; // e.g. "45 mJ", "1.2 J/cm2"
-  pulseWidthOrFrequency?: string; // e.g. "10 Hz", "5 ms"
-  passesOrDensity?: string; // e.g. "2 passes, Density 15%"
+  // Laser & Liệu pháp ánh sáng / Quang trị liệu
+  laserSubtype?: LaserSubtype;
+  laserType?: string; // e.g. "Laser CO2 Bốc tách", "Laser CO2 Fractional", "Laser Nd:YAG 1064nm", "Laser Nd:YAG 532nm", "Chiếu Narrowband UVB 311nm"
+  wavelength?: string; // e.g. "10,600 nm", "1064 nm", "532 nm", "311 nm (UVB)", "1550 nm"
+  energy?: string; // e.g. "45 mJ", "1.8 J/cm2", "350 mJ/cm2", "4.5 W"
+  spotSize?: string; // e.g. "Spot 6mm", "Spot 3mm", "Đầu chiếu cục bộ", "Buồng chiếu toàn thân"
+  pulseWidthOrFrequency?: string; // e.g. "10 Hz", "5 ms", "Nanosecond", "Thời gian chiếu: 3 phút"
+  passesOrDensity?: string; // e.g. "2 passes", "Mật độ 15%", "Liều tích lũy 1.2 J/cm2"
+  exposureTime?: string; // e.g. "2 phút 45 giây (Chiếu UV)", "20 phút (Đèn LED)"
   
   // Botox / Toxin
   botoxUnits?: number; // e.g. 30 Units
@@ -261,7 +274,9 @@ export type AuditAction =
   | 'DELETE_PROCEDURE'
   | 'UPDATE_INVENTORY'
   | 'RESTOCK_INVENTORY'
-  | 'DELETE_INVENTORY_ITEM';
+  | 'DELETE_INVENTORY_ITEM'
+  | 'SYSTEM_EXPORT'
+  | 'GOOGLE_DRIVE_SYNC';
 
 export interface AuditLogEntry {
   id: string;

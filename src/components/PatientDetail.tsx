@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Calendar, ShieldCheck, AlertCircle, FileText, Activity, Layers, Phone, Mail, MapPin, Sparkles, Camera, CheckCircle2, ChevronRight, User, Pill, Printer, Copy, Check, Trash2, Stethoscope, Sparkle, RefreshCw, Pencil, X, Package, Search, Zap, Syringe } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar, ShieldCheck, AlertCircle, FileText, Activity, Layers, Phone, Mail, MapPin, Sparkles, Camera, CheckCircle2, ChevronRight, User, Pill, Printer, Copy, Check, Trash2, Stethoscope, Sparkle, RefreshCw, Pencil, X, Package, Search, Zap, Syringe, Cloud, CloudUpload } from 'lucide-react';
 import { Patient, Lesion, LesionVisit, Appointment, PrescriptionItem, TreatmentPlan, ClinicalProcedure, InventoryItem } from '../types';
 import { ComparisonView } from './ComparisonView';
 import { LesionDetailModal } from './LesionDetailModal';
@@ -7,7 +7,9 @@ import { MedicalReportModal } from './MedicalReportModal';
 import { PrescriptionPrintModal } from './PrescriptionPrintModal';
 import { RecordProcedureModal } from './RecordProcedureModal';
 import { TREATMENT_PRESETS, POPULAR_MEDICATIONS } from '../data/treatmentPresets';
-import { logAuditEvent, loadInventory } from '../services/storageService';
+import { logAuditEvent, loadInventory, getPatientDossierExport } from '../services/storageService';
+import { getAccessToken, googleSignIn } from '../services/googleAuthService';
+import { getOrCreateFolder, uploadJsonToDrive } from '../services/googleDriveService';
 
 interface PatientDetailProps {
   patient: Patient;
@@ -39,6 +41,50 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({
   const [isNewLesionModalOpen, setIsNewLesionModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isRecordProcedureOpen, setIsRecordProcedureOpen] = useState(false);
+  const [isSavingToDrive, setIsSavingToDrive] = useState(false);
+  const [driveSaveSuccess, setDriveSaveSuccess] = useState<string | null>(null);
+
+  const handleSavePatientToDrive = async () => {
+    setIsSavingToDrive(true);
+    try {
+      let token = await getAccessToken();
+      if (!token) {
+        const res = await googleSignIn();
+        token = res?.accessToken || null;
+      }
+      if (!token) {
+        alert('Cần đăng nhập Google Drive để lưu trữ hồ sơ bệnh nhân.');
+        setIsSavingToDrive(false);
+        return;
+      }
+
+      const dossier = getPatientDossierExport(patient.id);
+      if (!dossier) return;
+
+      const folderId = await getOrCreateFolder(token);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const fileName = `HoSo_${patient.code}_${patient.fullName.replace(/\s+/g, '_')}_${timestamp}.json`;
+      const description = `Hồ sơ bệnh án da liễu & dermoscopy của bệnh nhân ${patient.fullName} (${patient.code})`;
+
+      await uploadJsonToDrive(token, fileName, dossier, folderId, description);
+
+      logAuditEvent(
+        'SYSTEM_EXPORT',
+        `Lưu hồ sơ bệnh nhân ${patient.fullName} (${patient.code}) lên Google Drive (${fileName})`,
+        patient.id,
+        patient.fullName,
+        'INFO'
+      );
+
+      setDriveSaveSuccess(`Đã lưu hồ sơ bệnh nhân ${patient.fullName} vào Google Drive!`);
+      setTimeout(() => setDriveSaveSuccess(null), 4000);
+    } catch (err: any) {
+      console.error('Error saving patient dossier to Drive:', err);
+      alert(`Lỗi lưu lên Google Drive: ${err.message || 'Không thể tải lên'}`);
+    } finally {
+      setIsSavingToDrive(false);
+    }
+  };
 
   // New lesion & consultation (hỏi bệnh & khám bệnh) form state
   const [newSite, setNewSite] = useState('');
@@ -303,6 +349,16 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({
 
         <div className="flex items-center gap-2">
           <button
+            onClick={handleSavePatientToDrive}
+            disabled={isSavingToDrive}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm transition"
+            title="Tải toàn bộ hồ sơ bệnh án và ảnh dermoscopy của bệnh nhân này lên Google Drive"
+          >
+            <CloudUpload className={`w-3.5 h-3.5 ${isSavingToDrive ? 'animate-bounce' : ''}`} />
+            {isSavingToDrive ? 'Đang lưu lên Drive...' : 'Lưu Hồ Sơ Vào Google Drive'}
+          </button>
+
+          <button
             onClick={() => setIsReportModalOpen(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-sm transition"
           >
@@ -311,6 +367,14 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Drive Save Notification */}
+      {driveSaveSuccess && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{driveSaveSuccess}</span>
+        </div>
+      )}
 
       {/* Patient Header Card */}
       <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm space-y-4">
@@ -905,6 +969,34 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({
                             <p className="text-slate-800 mt-0.5 font-mono bg-white px-2 py-1 rounded border border-slate-200">
                               {proc.dosageOrVolume}
                             </p>
+                          </div>
+                        )}
+                        {proc.technicalParams && Object.keys(proc.technicalParams).length > 0 && (
+                          <div className="pt-1.5 border-t border-slate-200">
+                            <span className="font-semibold text-slate-700 block mb-1">Thông số máy can thiệp:</span>
+                            <div className="grid grid-cols-2 gap-1.5 bg-white p-2 rounded border border-slate-200 text-[11px] font-mono text-slate-700">
+                              {proc.technicalParams.wavelength && (
+                                <div>Bước sóng: <strong>{proc.technicalParams.wavelength}</strong></div>
+                              )}
+                              {proc.technicalParams.energy && (
+                                <div>Năng lượng: <strong>{proc.technicalParams.energy}</strong></div>
+                              )}
+                              {proc.technicalParams.spotSize && (
+                                <div>Spot size: <strong>{proc.technicalParams.spotSize}</strong></div>
+                              )}
+                              {proc.technicalParams.exposureTime && (
+                                <div>Thời gian chiếu: <strong>{proc.technicalParams.exposureTime}</strong></div>
+                              )}
+                              {proc.technicalParams.passesOrDensity && (
+                                <div className="col-span-2">Mật độ/Passes: <strong>{proc.technicalParams.passesOrDensity}</strong></div>
+                              )}
+                              {proc.technicalParams.botoxUnits && (
+                                <div>Liều Botox: <strong>{proc.technicalParams.botoxUnits} Units</strong></div>
+                              )}
+                              {proc.technicalParams.fillerVolumeMl && (
+                                <div>Thể tích: <strong>{proc.technicalParams.fillerVolumeMl} ml</strong></div>
+                              )}
+                            </div>
                           </div>
                         )}
                         {proc.anesthesiaMethod && (

@@ -1,0 +1,6 @@
+{
+  "name": "Dermacare AI - Hồ sơ Da liễu & Dermoscopy",
+  "description": "Hệ thống quản lý hồ sơ bệnh nhân da liễu, lưu trữ tổn thương đại thể & dermoscopy, phân tích AI chẩn đoán, theo dõi tiến triển điều trị, nhắc lịch tự động và xuất báo cáo PDF chuẩn y tế.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

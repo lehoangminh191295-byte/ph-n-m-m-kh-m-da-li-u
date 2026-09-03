@@ -9,6 +9,19 @@ const PROCEDURES_KEY = 'dermacare_procedures_v1';
 const INVENTORY_KEY = 'dermacare_inventory_v1';
 const PIN_KEY = 'dermacare_security_pin_v1';
 
+let diskSyncTimeout: any = null;
+
+export function triggerAutoDiskSync() {
+  if (typeof window === 'undefined') return;
+  if (diskSyncTimeout) clearTimeout(diskSyncTimeout);
+  diskSyncTimeout = setTimeout(() => {
+    saveToLocalComputerDisk().catch((err) => {
+      // In web-only mode without server running or during static preview, this gracefully fails without disrupting user
+      console.debug('Background disk sync status:', err?.message);
+    });
+  }, 1200);
+}
+
 export function getStoredPatients(): Patient[] {
   try {
     const raw = localStorage.getItem(PATIENTS_KEY);
@@ -22,6 +35,7 @@ export function getStoredPatients(): Patient[] {
 
 export function savePatients(patients: Patient[]) {
   localStorage.setItem(PATIENTS_KEY, JSON.stringify(patients));
+  triggerAutoDiskSync();
 }
 
 export function getStoredLesions(): Lesion[] {
@@ -37,6 +51,7 @@ export function getStoredLesions(): Lesion[] {
 
 export function saveLesions(lesions: Lesion[]) {
   localStorage.setItem(LESIONS_KEY, JSON.stringify(lesions));
+  triggerAutoDiskSync();
 }
 
 export function getStoredAppointments(): Appointment[] {
@@ -52,6 +67,7 @@ export function getStoredAppointments(): Appointment[] {
 
 export function saveAppointments(appointments: Appointment[]) {
   localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
+  triggerAutoDiskSync();
 }
 
 export function getStoredAuditLogs(): AuditLogEntry[] {
@@ -105,6 +121,7 @@ export function getStoredProcedures(): ClinicalProcedure[] {
 
 export function saveProcedures(procedures: ClinicalProcedure[]) {
   localStorage.setItem(PROCEDURES_KEY, JSON.stringify(procedures));
+  triggerAutoDiskSync();
 }
 
 // --- Inventory Storage ---
@@ -121,6 +138,7 @@ export function getStoredInventory(): InventoryItem[] {
 
 export function saveInventory(items: InventoryItem[]) {
   localStorage.setItem(INVENTORY_KEY, JSON.stringify(items));
+  triggerAutoDiskSync();
 }
 
 export function adjustInventoryStock(itemId: string, delta: number, reason: string): InventoryItem | null {
@@ -255,3 +273,152 @@ export function getPatientDossierExport(patientId: string) {
     procedures,
   };
 }
+
+// --- Local Computer Hard Drive (data/clinic_database.json) Operations ---
+
+export interface LocalDiskStatus {
+  success: boolean;
+  isLocal: boolean;
+  dataDir: string;
+  dbFileName: string;
+  dbFilePath: string;
+  exists: boolean;
+  sizeBytes: number;
+  sizeFormatted: string;
+  updatedAt: string | null;
+  counts: {
+    patients: number;
+    lesions: number;
+    appointments: number;
+    procedures: number;
+    inventory: number;
+    auditLogs: number;
+  };
+  hasBackup: boolean;
+}
+
+/**
+ * Save all clinic state to local computer hard drive (data/clinic_database.json) via backend API
+ */
+export async function saveToLocalComputerDisk(): Promise<{ success: boolean; sizeFormatted?: string; message?: string; dbFilePath?: string }> {
+  const fullData = getFullClinicExportData();
+  try {
+    const res = await fetch('/api/storage/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullData),
+    });
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}`);
+    }
+    const result = await res.json();
+    return result;
+  } catch (e: any) {
+    return { success: false, message: e.message || 'Không thể ghi vào thư mục máy tính' };
+  }
+}
+
+/**
+ * Load database from local computer hard drive and synchronize into localStorage
+ */
+export async function loadFromLocalComputerDisk(): Promise<{ success: boolean; loaded: boolean; message: string; updatedAt?: string }> {
+  try {
+    const res = await fetch('/api/storage/load');
+    if (!res.ok) {
+      return { success: false, loaded: false, message: `Server HTTP ${res.status}` };
+    }
+    const result = await res.json();
+    if (result.exists && result.data) {
+      restoreFullClinicData({
+        data: result.data,
+        exportDate: result.updatedAt,
+      });
+      return {
+        success: true,
+        loaded: true,
+        message: 'Đã tải thành công dữ liệu từ tệp data/clinic_database.json',
+        updatedAt: result.updatedAt,
+      };
+    }
+    return {
+      success: true,
+      loaded: false,
+      message: 'Chưa có tệp dữ liệu trên ổ cứng máy tính (sẽ tạo mới khi lưu)',
+    };
+  } catch (e: any) {
+    return { success: false, loaded: false, message: e.message || 'Lỗi kết nối' };
+  }
+}
+
+/**
+ * Check health, file size, path and count of records on local computer disk
+ */
+export async function checkLocalDiskStatus(): Promise<LocalDiskStatus | null> {
+  try {
+    const res = await fetch('/api/storage/status');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Direct file download of database to user's computer (works in all browsers and offline)
+ */
+export function downloadBackupFileToComputer() {
+  const fullData = getFullClinicExportData();
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const fileName = `dermacare_backup_${dateStr}.json`;
+  const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  logAuditEvent(
+    'SYSTEM_EXPORT',
+    `Đã tải tệp cơ sở dữ liệu phòng khám về máy tính: ${fileName}`,
+    undefined,
+    'Sao lưu máy tính',
+    'INFO'
+  );
+}
+
+/**
+ * Read and restore a backup JSON file from the user's computer hard drive
+ */
+export function readAndRestoreBackupFile(file: File): Promise<{ success: boolean; message: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        restoreFullClinicData(parsed);
+
+        // Also push to local server hard disk
+        await saveToLocalComputerDisk();
+
+        logAuditEvent(
+          'SYSTEM_EXPORT',
+          `Khôi phục dữ liệu từ tệp máy tính (${file.name}, kích thước ${(file.size / 1024).toFixed(1)} KB)`,
+          undefined,
+          'Khôi phục tệp',
+          'WARNING'
+        );
+
+        resolve({ success: true, message: `Đã khôi phục thành công từ tệp ${file.name}!` });
+      } catch (err: any) {
+        reject(new Error('Tệp không đúng định dạng JSON hoặc cấu trúc không tương thích.'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Không thể đọc tệp từ máy tính.'));
+    reader.readAsText(file);
+  });
+}
+

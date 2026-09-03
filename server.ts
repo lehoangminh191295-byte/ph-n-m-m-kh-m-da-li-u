@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
@@ -9,6 +10,20 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Local disk data directory and database files
+const DATA_DIR = path.join(process.cwd(), "data");
+const DB_FILE = path.join(DATA_DIR, "clinic_database.json");
+const DB_BACKUP_FILE = path.join(DATA_DIR, "clinic_database.bak.json");
+
+// Ensure data folder exists on the computer disk
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (err) {
+    console.error("Could not create local data directory:", err);
+  }
+}
 
 const app = express();
 const PORT = 3000;
@@ -45,6 +60,176 @@ app.get("/api/health", (_req, res) => {
     aiConfigured: Boolean(process.env.GEMINI_API_KEY),
     timestamp: new Date().toISOString(),
   });
+});
+
+// --- Local Computer File Storage Endpoints ---
+
+// 1. Get status of database on local computer hard drive
+app.get("/api/storage/status", (_req, res) => {
+  try {
+    const exists = fs.existsSync(DB_FILE);
+    let sizeBytes = 0;
+    let updatedAt: string | null = null;
+    let counts = {
+      patients: 0,
+      lesions: 0,
+      appointments: 0,
+      procedures: 0,
+      inventory: 0,
+      auditLogs: 0,
+    };
+
+    if (exists) {
+      const stats = fs.statSync(DB_FILE);
+      sizeBytes = stats.size;
+      updatedAt = stats.mtime.toISOString();
+      try {
+        const raw = fs.readFileSync(DB_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        const d = parsed.data || parsed;
+        counts = {
+          patients: Array.isArray(d.patients) ? d.patients.length : 0,
+          lesions: Array.isArray(d.lesions) ? d.lesions.length : 0,
+          appointments: Array.isArray(d.appointments) ? d.appointments.length : 0,
+          procedures: Array.isArray(d.procedures) ? d.procedures.length : 0,
+          inventory: Array.isArray(d.inventory) ? d.inventory.length : 0,
+          auditLogs: Array.isArray(d.auditLogs) ? d.auditLogs.length : 0,
+        };
+        if (parsed.updatedAt) {
+          updatedAt = parsed.updatedAt;
+        }
+      } catch (parseErr) {
+        console.warn("Notice: could not parse existing database JSON for counts:", parseErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      isLocal: true,
+      dataDir: "data",
+      dbFileName: "clinic_database.json",
+      dbFilePath: DB_FILE,
+      exists,
+      sizeBytes,
+      sizeFormatted: sizeBytes > 0 ? (sizeBytes / 1024).toFixed(1) + " KB" : "0 KB",
+      updatedAt,
+      counts,
+      hasBackup: fs.existsSync(DB_BACKUP_FILE),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Load database from local computer hard drive
+app.get("/api/storage/load", (_req, res) => {
+  try {
+    if (!fs.existsSync(DB_FILE)) {
+      return res.json({ exists: false, data: null });
+    }
+    const raw = fs.readFileSync(DB_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    res.json({
+      exists: true,
+      data: parsed.data || parsed,
+      updatedAt: parsed.updatedAt || null,
+      appVersion: parsed.appVersion || "1.2.0",
+      clinicName: parsed.clinicName || "Phòng Khám Da Liễu Dermacare AI",
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. Save database to local computer hard drive (data/clinic_database.json)
+app.post("/api/storage/save", (req, res) => {
+  try {
+    const { data, clinicName, appVersion } = req.body;
+    if (!data || typeof data !== "object") {
+      return res.status(400).json({ error: "Dữ liệu không hợp lệ." });
+    }
+
+    // Create automatic rolling backup of previous file if it exists
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        fs.copyFileSync(DB_FILE, DB_BACKUP_FILE);
+      } catch (backupErr) {
+        console.warn("Could not create rolling backup:", backupErr);
+      }
+    }
+
+    const payload = {
+      appVersion: appVersion || "1.2.0",
+      updatedAt: new Date().toISOString(),
+      clinicName: clinicName || "Phòng Khám Da Liễu Dermacare AI",
+      data,
+    };
+
+    fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), "utf-8");
+    const stats = fs.statSync(DB_FILE);
+
+    res.json({
+      success: true,
+      message: "Đã lưu trữ dữ liệu an toàn vào ổ cứng máy tính (data/clinic_database.json).",
+      savedAt: payload.updatedAt,
+      sizeBytes: stats.size,
+      sizeFormatted: (stats.size / 1024).toFixed(1) + " KB",
+      dbFilePath: DB_FILE,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Direct download of database file
+app.get("/api/storage/download", (_req, res) => {
+  try {
+    if (!fs.existsSync(DB_FILE)) {
+      return res.status(404).json({ error: "Chưa có tệp dữ liệu lưu trữ trên máy tính." });
+    }
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Disposition", `attachment; filename="dermacare_backup_${dateStr}.json"`);
+    res.setHeader("Content-Type", "application/json");
+    const fileStream = fs.createReadStream(DB_FILE);
+    fileStream.pipe(res);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. Restore database from uploaded JSON payload
+app.post("/api/storage/restore", (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || (!payload.data && !payload.patients)) {
+      return res.status(400).json({ error: "Tệp sao lưu không đúng định dạng chuẩn Dermacare." });
+    }
+
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        fs.copyFileSync(DB_FILE, DB_BACKUP_FILE);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const standardPayload = {
+      appVersion: payload.appVersion || "1.2.0",
+      updatedAt: new Date().toISOString(),
+      clinicName: payload.clinicName || "Phòng Khám Da Liễu Dermacare AI",
+      data: payload.data || payload,
+    };
+
+    fs.writeFileSync(DB_FILE, JSON.stringify(standardPayload, null, 2), "utf-8");
+
+    res.json({
+      success: true,
+      message: "Đã khôi phục cơ sở dữ liệu trên ổ cứng máy tính thành công.",
+      restoredAt: standardPayload.updatedAt,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Helper to parse base64 image data

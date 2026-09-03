@@ -20,7 +20,8 @@ import {
   Package,
   Zap,
   Syringe,
-  Cloud
+  Cloud,
+  HardDrive
 } from 'lucide-react';
 import { Patient, Lesion, Appointment, AuditLogEntry, FitzpatrickSkinType, ClinicalProcedure, InventoryItem } from './types';
 import {
@@ -38,13 +39,15 @@ import {
   saveProcedures,
   loadInventory,
   saveInventory,
-  adjustInventoryStock
+  adjustInventoryStock,
+  loadFromLocalComputerDisk
 } from './services/storageService';
 import { PatientDetail } from './components/PatientDetail';
 import { AppointmentsView } from './components/AppointmentsView';
 import { ProceduresView } from './components/ProceduresView';
 import { InventoryView } from './components/InventoryView';
 import { GoogleDriveView } from './components/GoogleDriveView';
+import { LocalStorageView } from './components/LocalStorageView';
 import { NewPatientModal } from './components/NewPatientModal';
 import { SecurityLockScreen } from './components/SecurityLockScreen';
 import { SecurityAuditModal } from './components/SecurityAuditModal';
@@ -59,8 +62,8 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLocked, setIsLocked] = useState<boolean>(false);
 
-  // Active view: 'patients' | 'appointments' | 'procedures' | 'inventory' | 'google-drive'
-  const [currentTab, setCurrentTab] = useState<'patients' | 'appointments' | 'procedures' | 'inventory' | 'google-drive'>('patients');
+  // Active view: 'patients' | 'appointments' | 'procedures' | 'inventory' | 'google-drive' | 'local-storage'
+  const [currentTab, setCurrentTab] = useState<'patients' | 'appointments' | 'procedures' | 'inventory' | 'google-drive' | 'local-storage'>('patients');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
   // Google Drive Auth status
@@ -119,6 +122,18 @@ export default function App() {
 
     // Initial audit event
     logAuditEvent('VIEW_PATIENT', 'Khởi động ứng dụng Dermacare AI', undefined, undefined, 'INFO');
+
+    // Check if local computer disk database exists (runs when hosted locally)
+    loadFromLocalComputerDisk().then((res) => {
+      if (res.success && res.loaded) {
+        setPatients(loadPatients());
+        setLesions(loadLesions());
+        setAppointments(loadAppointments());
+        setProcedures(loadProcedures());
+        setInventory(loadInventory());
+        setAuditLogs(loadAuditLogs());
+      }
+    }).catch((e) => console.debug('Local disk check:', e?.message));
   }, []);
 
   const handleUpdatePatients = (newPatients: Patient[]) => {
@@ -347,6 +362,24 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => {
+              setSelectedPatientId(null);
+              setCurrentTab('local-storage');
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              currentTab === 'local-storage'
+                ? 'bg-emerald-600 text-white'
+                : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
+            }`}
+          >
+            <HardDrive className="w-4 h-4 text-emerald-400" />
+            <span className="flex-1 text-left">Lưu Trữ Máy Tính & Local</span>
+            <span className="text-[10px] bg-emerald-900/80 text-emerald-300 px-1.5 py-0.5 rounded font-bold">
+              Ổ đĩa
+            </span>
+          </button>
+
+          <button
             onClick={() => setIsSecurityModalOpen(true)}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-slate-800 hover:text-slate-200 text-slate-400"
           >
@@ -491,7 +524,35 @@ export default function App() {
               >
                 Drive
               </button>
+              <button
+                onClick={() => {
+                  setSelectedPatientId(null);
+                  setCurrentTab('local-storage');
+                }}
+                className={`px-2 py-1 rounded text-xs font-semibold ${
+                  currentTab === 'local-storage' ? 'bg-emerald-600 text-white' : 'text-slate-600 bg-slate-100'
+                }`}
+              >
+                Local
+              </button>
             </div>
+
+            {/* Local Computer Storage Button */}
+            <button
+              onClick={() => {
+                setSelectedPatientId(null);
+                setCurrentTab('local-storage');
+              }}
+              className={`px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border flex items-center gap-1.5 transition ${
+                currentTab === 'local-storage'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+              }`}
+              title="Quản lý lưu trữ ổ cứng & Hướng dẫn chạy Local"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden lg:inline">Lưu Trữ Máy Tính</span>
+            </button>
 
             {/* Google Drive Status Indicator / Button */}
             <button
@@ -587,6 +648,9 @@ export default function App() {
             ) : currentTab === 'google-drive' ? (
               /* Google Drive Cloud Sync, Backup and Restore */
               <GoogleDriveView onDataRestored={reloadAllClinicData} />
+            ) : currentTab === 'local-storage' ? (
+              /* Local Computer Hard Drive Storage and Run Locally Setup Guide */
+              <LocalStorageView onDataReloaded={reloadAllClinicData} />
             ) : (
               /* Patients Directory and Geometric Balance Clinical Overview */
               <div className="space-y-6">
